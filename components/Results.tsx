@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { ExamResult, User } from '../types';
-import { AlertTriangle, Check, X, Code, ChevronDown, ChevronUp, Copy, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Check, X, Code, LogOut } from 'lucide-react';
 
 interface ResultsProps {
   result: ExamResult;
   user: User;
+  onRestart: () => void;
 }
 
-const Results: React.FC<ResultsProps> = ({ result, user }) => {
+const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [showScriptHelp, setShowScriptHelp] = useState(false);
 
   // --- CALCULATION LOGIC (SCALE OF 20) ---
   const rawPercentage = result.maxScore > 0 ? (result.totalScore / result.maxScore) : 0;
@@ -140,60 +140,6 @@ const Results: React.FC<ResultsProps> = ({ result, user }) => {
           </div>
         </div>
 
-        {/* GOOGLE SHEETS SCRIPT CONFIGURATION HELP */}
-        <div className="bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-700 ring-2 ring-indigo-500">
-            <button 
-                onClick={() => setShowScriptHelp(!showScriptHelp)}
-                className="w-full px-6 py-4 flex items-center justify-between text-white hover:bg-gray-700 transition-colors bg-indigo-900"
-            >
-                <div className="flex items-center gap-3">
-                    <Code className="w-5 h-5 text-green-400" />
-                    <div className="text-left">
-                        <h3 className="text-sm font-bold text-white">⚠️ CONFIGURACIÓN TÉCNICA (OPCIONAL)</h3>
-                        <p className="text-xs text-indigo-200">Ver código para Google Apps Script si no se guardan datos.</p>
-                    </div>
-                </div>
-                {showScriptHelp ? <ChevronUp className="w-5 h-5 text-gray-400"/> : <ChevronDown className="w-5 h-5 text-gray-400"/>}
-            </button>
-            
-            {showScriptHelp && (
-                <div className="p-6 bg-gray-900 border-t border-gray-700">
-                    <p className="text-gray-300 text-sm mb-4">
-                        Asegúrese de que su script en <strong>Extensiones {'>'} Apps Script</strong> sea idéntico a este:
-                    </p>
-                    <div className="relative group mb-4">
-                        <pre className="bg-black p-4 rounded-lg text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto border border-gray-700">
-{`function doPost(e) {
-  var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
-
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    
-    sheet.appendRow([
-      new Date(),           
-      data.fullName,        
-      data.cedula,          
-      data.score,           
-      data.maxScore,        
-      data.percentage,      
-      data.detailedReport   // COLUMNA G
-    ]);
-    
-    return ContentService.createTextOutput("Success");
-  } catch (e) {
-    return ContentService.createTextOutput("Error: " + e.toString());
-  } finally {
-    lock.releaseLock();
-  }
-}`}
-                        </pre>
-                    </div>
-                </div>
-            )}
-        </div>
-
         {/* Detailed Feedback Display */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
           <div className="px-6 py-5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
@@ -246,6 +192,18 @@ const Results: React.FC<ResultsProps> = ({ result, user }) => {
             ))}
           </div>
         </div>
+        
+        {/* Restart Button */}
+        <div className="flex justify-center pt-6 pb-12">
+            <button 
+                onClick={onRestart}
+                className="flex items-center gap-2 px-8 py-3 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1"
+            >
+                <LogOut className="w-5 h-5" />
+                Finalizar y Volver al Inicio
+            </button>
+        </div>
+
       </div>
     </div>
   );

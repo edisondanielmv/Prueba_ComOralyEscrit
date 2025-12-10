@@ -72,6 +72,15 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRestart = () => {
+    setUser(null);
+    setExamQuestions([]);
+    setExamResult(null);
+    setIsSubmitting(false);
+    setIsGenerating(false);
+    setGradingProgress(0);
+  };
+
   const gradeSingleQuestion = async (question: Question, answerValue: string) => {
     const safeResponse = {
         questionId: question.id,
@@ -219,7 +228,7 @@ const App: React.FC = () => {
   }
 
   if (examResult) {
-    return <Results result={examResult} user={user} />;
+    return <Results result={examResult} user={user} onRestart={handleRestart} />;
   }
 
   return (
