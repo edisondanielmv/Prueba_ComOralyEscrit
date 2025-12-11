@@ -1,31 +1,31 @@
 import { GoogleGenAI } from "@google/genai";
 import { Question, AIAnalysis, TextContext, QuestionType } from '../types';
 
-let apiKey = '';
-try {
-  // Safely attempt to access process.env.API_KEY
-  apiKey = process.env.API_KEY || '';
-} catch (e) {
-  console.warn("process.env is not defined, running without explicit key variable check.");
-}
+// Helper to get client with dynamic key or fallback to env
+const getClient = (customKey?: string) => {
+    let key = customKey;
+    if (!key) {
+        try {
+            key = process.env.API_KEY || '';
+        } catch (e) {
+            console.warn("process.env access failed");
+        }
+    }
+    return new GoogleGenAI({ apiKey: key || '' });
+};
 
-const ai = new GoogleGenAI({ apiKey });
-
-// Helper to strictly extract JSON from AI response (Object or Array)
+// Helper to strictly extract JSON from AI response
 const cleanJsonString = (str: string) => {
   if (!str) return '[]';
   
-  // Remove markdown code blocks first
   let clean = str.replace(/```json/g, '').replace(/```/g, '').trim();
 
-  // Find the first occurrence of '{' or '['
   const firstOpenBrace = clean.indexOf('{');
   const firstOpenBracket = clean.indexOf('[');
   
   let start = -1;
   let end = -1;
 
-  // Determine if it looks like an Object or an Array based on what comes first
   if (firstOpenBrace !== -1 && (firstOpenBracket === -1 || firstOpenBrace < firstOpenBracket)) {
       start = firstOpenBrace;
       end = clean.lastIndexOf('}');
@@ -38,17 +38,61 @@ const cleanJsonString = (str: string) => {
     return clean.substring(start, end + 1);
   }
   
-  // Fallback: return the stripped string
   return clean;
+};
+
+// Retry helper for API calls
+async function generateWithRetry(ai: GoogleGenAI, model: string, prompt: string, retries = 3, delay = 2000): Promise<any> {
+    try {
+        return await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json"
+            }
+        });
+    } catch (error: any) {
+        if (retries > 0) {
+            console.warn(`Gemini API request failed. Retrying in ${delay}ms... (${retries} attempts left). Error: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return generateWithRetry(ai, model, prompt, retries - 1, delay * 2);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Checks if the provided API Key (or system default) works.
+ */
+export const checkSystemAvailability = async (userApiKey?: string): Promise<boolean> => {
+    const ai = getClient(userApiKey);
+    
+    // Check if we actually have a key to test
+    let currentKey = userApiKey;
+    if (!currentKey) {
+        try { currentKey = process.env.API_KEY; } catch(e) {}
+    }
+    if (!currentKey) return false;
+
+    try {
+        await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: "ping",
+        });
+        return true;
+    } catch (error) {
+        console.error("System Check Failed:", error);
+        return false;
+    }
 };
 
 export const evaluateOpenAnswer = async (
   question: Question, 
   userAnswer: string,
-  contextText?: TextContext
+  contextText?: TextContext,
+  userApiKey?: string
 ): Promise<AIAnalysis> => {
   
-  // Fast fail for empty answers
   if (!userAnswer || userAnswer.trim().length < 3) {
     return {
       questionId: question.id,
@@ -57,6 +101,7 @@ export const evaluateOpenAnswer = async (
     };
   }
 
+  const ai = getClient(userApiKey);
   const model = "gemini-2.5-flash";
 
   const prompt = `
@@ -73,7 +118,7 @@ export const evaluateOpenAnswer = async (
     2. Asigna un puntaje preciso (puede ser decimal, ej: 1.5).
     3. Provee retroalimentación breve justificando la nota.
     
-    Retorna ESTRICTAMENTE este formato JSON (sin markdown, sin texto extra):
+    Retorna ESTRICTAMENTE este formato JSON:
     {
       "score": (número),
       "feedback": "(texto breve)"
@@ -81,14 +126,7 @@ export const evaluateOpenAnswer = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json" 
-      }
-    });
-
+    const response = await generateWithRetry(ai, model, prompt);
     const rawText = response.text || '{}';
     const cleanedText = cleanJsonString(rawText);
     
@@ -97,7 +135,6 @@ export const evaluateOpenAnswer = async (
         result = JSON.parse(cleanedText);
     } catch (e) {
         console.warn("JSON Parse failed for evaluation", rawText);
-        // Fallback regex for score extraction
         const scoreMatch = rawText.match(/"score":\s*([\d.]+)/);
         result = {
             score: scoreMatch ? parseFloat(scoreMatch[1]) : 0,
@@ -111,23 +148,39 @@ export const evaluateOpenAnswer = async (
       feedback: result.feedback || "Sin comentarios generados."
     };
 
-  } catch (error) {
-    console.error("Gemini Grading Error:", error);
+  } catch (error: any) {
+    console.error("Gemini Grading Error Final:", error);
+    
+    let feedbackMsg = "Error de conexión con IA. Se asignó 0 por defecto.";
+    if (error.message && error.message.includes('429')) {
+        feedbackMsg = "Error: Sistema saturado (Rate Limit). Intente nuevamente.";
+    } else if (error.message && (error.message.includes('400') || error.message.includes('403'))) {
+        feedbackMsg = "Error: Problema de permisos o API Key inválida.";
+    }
+
     return {
       questionId: question.id,
       score: 0,
-      feedback: "Error de conexión con IA. Se asignó 0 por defecto."
+      feedback: feedbackMsg
     };
   }
 };
 
 export const reformulateExam = async (
   questions: Question[], 
-  studentName: string
+  studentName: string,
+  userApiKey?: string
 ): Promise<Question[]> => {
+  const ai = getClient(userApiKey);
   const model = "gemini-2.5-flash";
+  
+  // Check if we have a key (either custom or env)
+  let activeKey = userApiKey;
+  if (!activeKey) {
+     try { activeKey = process.env.API_KEY; } catch(e) {}
+  }
+  if (!activeKey) return questions;
 
-  // Simplify to save tokens
   const simplifiedQuestions = questions.map(q => ({
     id: q.id,
     type: q.type,
@@ -147,7 +200,7 @@ export const reformulateExam = async (
     2. Cambia la redacción de 'questionText' para que sea única pero evalúe lo mismo.
     3. Para preguntas de OPCIÓN MÚLTIPLE: 
        - Puedes cambiar el orden de las opciones.
-       - SI CAMBIAS EL ORDEN, DEBES ACTUALIZAR 'correctOptionIndex' para que apunte a la respuesta correcta.
+       - SI CAMBIAS EL ORDEN, DEBES ACTUALIZAR 'correctOptionIndex'.
     4. El idioma debe ser ESPAÑOL FORMAL.
     
     Responde SOLO con el JSON Array válido.
@@ -155,11 +208,16 @@ export const reformulateExam = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+    
+    const response: any = await Promise.race([
+        ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        }),
+        timeoutPromise
+    ]);
 
     const rawText = response.text || '[]';
     const cleanedText = cleanJsonString(rawText);
@@ -168,8 +226,7 @@ export const reformulateExam = async (
     try {
         newQuestionsData = JSON.parse(cleanedText);
     } catch (e) {
-        console.error("Failed to parse reformulation JSON", e);
-        return questions; // Fallback to original if parse fails
+        return questions; 
     }
     
     if (!Array.isArray(newQuestionsData)) {
@@ -194,7 +251,7 @@ export const reformulateExam = async (
     return finalQuestions;
 
   } catch (error) {
-    console.error("Error generating exam:", error);
+    console.warn("Skipping exam reformulation due to API load:", error);
     return questions;
   }
 };

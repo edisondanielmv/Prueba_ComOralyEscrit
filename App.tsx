@@ -60,7 +60,8 @@ const App: React.FC = () => {
       const rawExam = [...readingQuestions, ...fillerQuestions];
 
       // 4. Reformulate with AI for uniqueness
-      const uniqueExam = await reformulateExam(rawExam, userData.fullName);
+      // PASS THE USER'S API KEY HERE
+      const uniqueExam = await reformulateExam(rawExam, userData.fullName, userData.apiKey);
       
       setExamQuestions(uniqueExam);
     } catch (error) {
@@ -105,12 +106,14 @@ const App: React.FC = () => {
         } else {
             const contextText = EXAM_TEXTS.find(t => t.id === question.textId);
             
+            // Increased timeout to 45 seconds to account for retries
             const timeoutPromise = new Promise<any>((resolve) => {
-                setTimeout(() => resolve({ score: 0, feedback: "Tiempo de espera IA agotado. Revisión manual pendiente." }), 30000);
+                setTimeout(() => resolve({ score: 0, feedback: "Tiempo de espera IA agotado. Revise su conexión o intente más tarde." }), 45000);
             });
 
+            // PASS USER API KEY HERE
             const result = await Promise.race([
-                evaluateOpenAnswer(question, answerValue, contextText),
+                evaluateOpenAnswer(question, answerValue, contextText, user?.apiKey),
                 timeoutPromise
             ]);
             
@@ -138,7 +141,8 @@ const App: React.FC = () => {
     const allDetails: any[] = [];
     
     try {
-      const BATCH_SIZE = 3;
+      // Reduced Batch Size to prevent Rate Limits (429)
+      const BATCH_SIZE = 2;
       
       for (let i = 0; i < examQuestions.length; i += BATCH_SIZE) {
          const batch = examQuestions.slice(i, i + BATCH_SIZE);
@@ -153,7 +157,8 @@ const App: React.FC = () => {
          const newProgress = Math.round(((i + batch.length) / examQuestions.length) * 100);
          setGradingProgress(Math.min(newProgress, 99)); 
          
-         await new Promise(r => setTimeout(r, 50));
+         // Increased delay between batches to 1.5 seconds
+         await new Promise(r => setTimeout(r, 1500));
       }
 
       const totalScore = allDetails.reduce((sum, detail) => sum + detail.pointsEarned, 0);

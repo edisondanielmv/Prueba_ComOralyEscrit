@@ -23,6 +23,7 @@ export interface Question {
 export interface User {
   fullName: string;
   cedula: string;
+  apiKey?: string; // Optional custom API key
 }
 
 export interface Answer {
