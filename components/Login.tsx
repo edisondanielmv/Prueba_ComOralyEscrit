@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { BookOpen, User as UserIcon, CreditCard, Loader2, AlertTriangle, Key, HelpCircle, X, ExternalLink } from 'lucide-react';
+import { BookOpen, User as UserIcon, CreditCard, Loader2, AlertTriangle, Key, HelpCircle, X, CheckCircle } from 'lucide-react';
 import { checkSystemAvailability } from '../services/geminiService';
 
 interface LoginProps {
@@ -19,6 +19,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setError('');
 
+    // 1. Validaciones básicas de campos
     if (!fullName.trim() || !cedula.trim()) {
       setError('Por favor complete su Nombre y Cédula.');
       return;
@@ -28,19 +29,38 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       return;
     }
 
-    // Verify connection before starting using provided key or system default
+    const cleanApiKey = apiKey.trim();
+
+    // 2. Validación de formato de Clave (si el usuario ingresó una)
+    if (cleanApiKey) {
+        if (!cleanApiKey.startsWith('AIza')) {
+            setError('La Clave Personal parece incorrecta. Debe comenzar con los caracteres "AIza". Por favor verifique que copió todo el código.');
+            return;
+        }
+    }
+
+    // 3. Verificación de conexión (Ping a Gemini)
     setIsVerifying(true);
-    const isSystemReady = await checkSystemAvailability(apiKey);
+    
+    // Pasamos la clave limpia para verificar. Si está vacía, el servicio intentará usar la del sistema.
+    const isSystemReady = await checkSystemAvailability(cleanApiKey);
     
     if (!isSystemReady) {
         setIsVerifying(false);
-        const keyStatus = apiKey ? "La Clave ingresada no funciona." : "El sistema central está ocupado.";
-        setError(`Error de Conexión: ${keyStatus} Por favor ingrese una Clave Personal válida.`);
+        
+        if (cleanApiKey) {
+            // Error específico para clave de usuario inválida
+            setError('La Clave ingresada fue rechazada por Google. Verifique que la copió correctamente y que es válida.');
+        } else {
+            // Error genérico de sistema (solo si no puso clave)
+            setError('El sistema central está saturado en este momento. Por favor, utilice la opción "¿No tienes clave?" para generar una Clave Personal y asegurar su acceso.');
+        }
         return;
     }
 
+    // 4. Todo correcto, procedemos al login
     setIsVerifying(false);
-    onLogin({ fullName, cedula, apiKey });
+    onLogin({ fullName, cedula, apiKey: cleanApiKey });
   };
 
   return (
@@ -168,7 +188,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input
                   type="password"
                   id="apiKey"
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent sm:text-sm transition-all"
+                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg leading-5 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent sm:text-sm transition-all ${apiKey && !apiKey.trim().startsWith('AIza') ? 'border-red-300 bg-red-50 text-red-900' : 'border-gray-300 bg-gray-50 text-gray-900'}`}
                   placeholder="Pega tu clave aquí (empieza con AIza...)"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
@@ -199,7 +219,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           >
             {isVerifying ? (
                 <span className="flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin"/> Conectando...
+                    <Loader2 className="w-5 h-5 animate-spin"/> Validando acceso...
                 </span>
             ) : (
                 "Comenzar Evaluación"
