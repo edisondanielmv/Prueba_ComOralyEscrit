@@ -15,10 +15,11 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes
+  // Configurado a 60 minutos (3600 segundos)
+  const [timeLeft, setTimeLeft] = useState(3600); 
   const [showFinishModal, setShowFinishModal] = useState(false);
 
-  // Timer Logic
+  // Lógica del Temporizador
   useEffect(() => {
     if (isSubmitting) return;
 
@@ -26,7 +27,8 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          submitExamNow(); // Auto submit
+          // Si el tiempo llega a 0, enviamos inmediatamente
+          submitExamNow(); 
           return 0;
         }
         return prev - 1;
@@ -42,10 +44,8 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Safe access to current question
   const currentQuestion = questions && questions.length > 0 ? questions[currentQuestionIndex] : null;
   
-  // Logic to find if this question belongs to a text
   const isReadingSection = !!currentQuestion?.textId && currentQuestion.textId !== 0;
   
   const currentTextObj = isReadingSection 
@@ -59,6 +59,7 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
   };
 
   const submitExamNow = () => {
+    // Recopilamos todas las respuestas. Si una pregunta no tiene respuesta (undefined), enviamos cadena vacía.
     const formattedAnswers: Answer[] = questions.map(q => ({
       questionId: q.id,
       value: answers[q.id] || '' 
@@ -83,7 +84,6 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
   const totalCount = questions.length;
   const progress = totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0;
 
-  // SAFETY GUARD: If questions are missing or loading failed
   if (!questions || questions.length === 0) {
       return (
           <div className="h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
@@ -96,7 +96,7 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden relative text-gray-800">
       
-      {/* CONFIRMATION MODAL OVERLAY */}
+      {/* Modal de confirmación manual */}
       {showFinishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
@@ -109,7 +109,7 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
                 Has respondido <strong className="text-indigo-600">{answeredCount}</strong> de <strong className="text-gray-800">{totalCount}</strong> preguntas.
                 {answeredCount < totalCount && (
                   <span className="block mt-2 text-red-500 font-medium">
-                    Hay {totalCount - answeredCount} preguntas sin contestar.
+                    Las preguntas sin responder ({totalCount - answeredCount}) se calificarán con 0.
                   </span>
                 )}
               </p>
@@ -146,12 +146,11 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
 
           <div className="flex items-center gap-4">
              {/* TIMER */}
-             <div className={`flex items-center gap-2 px-3 py-1 rounded border shadow-sm ${timeLeft < 60 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-gray-600'}`}>
+             <div className={`flex items-center gap-2 px-3 py-1 rounded border shadow-sm ${timeLeft < 300 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-white border-gray-200 text-gray-600'}`}>
                 <Clock className="w-4 h-4" />
                 <span className="font-mono text-sm font-semibold">{formatTime(timeLeft)}</span>
              </div>
 
-             {/* FINISH BUTTON */}
              <button
                type="button"
                onClick={() => setShowFinishModal(true)}
@@ -166,15 +165,14 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
         </div>
       </header>
 
-      {/* MOBILE PROGRESS BAR */}
+      {/* Mobile Progress Bar */}
       <div className="bg-gray-200 h-1 flex sm:hidden w-full relative z-20">
-         <div className={`h-full transition-all duration-1000 ${timeLeft < 60 ? 'bg-red-500' : 'bg-indigo-500'}`} style={{width: `${(timeLeft/1200)*100}%`}} />
+         <div className={`h-full transition-all duration-1000 ${timeLeft < 60 ? 'bg-red-500' : 'bg-indigo-500'}`} style={{width: `${(timeLeft/3600)*100}%`}} />
       </div>
 
-      {/* MAIN CONTAINER */}
       <div className="flex flex-1 overflow-hidden relative max-w-[1920px] mx-auto w-full">
         
-        {/* SIDEBAR NAVIGATOR */}
+        {/* SIDEBAR */}
         <div className={`
            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 shadow-xl lg:shadow-none
            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -227,19 +225,14 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <div className="w-3 h-3 bg-white border border-gray-200 rounded"></div> Pendiente
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                      <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
-                      <span>Lectura Comprensiva</span>
-                    </div>
                  </div>
               </div>
            </div>
         </div>
 
-        {/* CONTENT AREA */}
+        {/* CONTENT */}
         <div className="flex-1 flex flex-col lg:flex-row relative bg-white overflow-hidden">
            
-           {/* 1. READING PANEL */}
            {isReadingSection && (
                <div className="lg:w-1/2 h-2/5 lg:h-full bg-gray-50 border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto p-6 lg:p-10 shadow-inner prose-scroll">
                   <article className="prose prose-sm lg:prose-base max-w-none text-gray-700 font-serif leading-relaxed">
@@ -259,7 +252,6 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
                </div>
            )}
 
-           {/* 2. QUESTION PANEL */}
            <div className={`
              flex flex-col bg-white transition-all duration-300 overflow-hidden
              ${isReadingSection ? 'lg:w-1/2 h-3/5 lg:h-full' : 'w-full h-full'}
@@ -287,7 +279,6 @@ const Exam: React.FC<ExamProps> = ({ user, questions, onSubmit, isSubmitting }) 
                )}
              </div>
 
-             {/* NAVIGATION FOOTER */}
              <div className="bg-white p-4 border-t border-gray-100 flex justify-between items-center z-20 flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                <button
                  onClick={prevQuestion}

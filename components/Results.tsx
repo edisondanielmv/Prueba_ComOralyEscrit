@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ExamResult, User } from '../types';
-import { AlertTriangle, Check, X, Code, LogOut } from 'lucide-react';
+import { AlertTriangle, Check, X, Code, LogOut, FileText, MinusCircle } from 'lucide-react';
 
 interface ResultsProps {
   result: ExamResult;
@@ -11,10 +11,15 @@ interface ResultsProps {
 const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
-  // --- CALCULATION LOGIC (SCALE OF 20) ---
+  // --- LOGIC ---
   const rawPercentage = result.maxScore > 0 ? (result.totalScore / result.maxScore) : 0;
   const gradeOver20 = rawPercentage * 20;
   
+  // Estadísticas de completitud
+  const answeredCount = result.details.filter(d => d.userAnswer && d.userAnswer.trim().length > 0).length;
+  const totalQuestions = result.details.length;
+  const unansweredCount = totalQuestions - answeredCount;
+
   // Grade Color Logic
   let gradeColor = 'text-red-600';
   let gradeBg = 'bg-red-50 border-red-200';
@@ -51,7 +56,6 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
            feedbackText = d.isCorrect ? "CORRECTO" : "INCORRECTO";
        }
 
-       // Format: [P# | Earned/Max pts] R: Answer /// F: Feedback
        return `[P${qNum} | ${d.pointsEarned.toFixed(2)}/${d.maxPoints} pts] R: ${answerText} /// F: ${feedbackText}`;
     }).join('\n-----------------------------------\n');
 
@@ -112,6 +116,20 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
                </span>
             </div>
 
+            {/* Resumen de Contestadas */}
+            <div className="mt-6 flex justify-center gap-4 text-sm">
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                    <FileText className="w-4 h-4 text-indigo-500"/>
+                    <span className="text-gray-600">Respondidas: <strong className="text-gray-900">{answeredCount}</strong> / {totalQuestions}</span>
+                </div>
+                {unansweredCount > 0 && (
+                    <div className="flex items-center gap-2 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
+                        <MinusCircle className="w-4 h-4 text-red-500"/>
+                        <span className="text-red-700">Sin Responder: <strong>{unansweredCount}</strong> (0 pts)</span>
+                    </div>
+                )}
+            </div>
+
             <div className="mt-8 flex flex-col items-center gap-3">
               {saveStatus === 'saving' && (
                   <span className="inline-flex items-center gap-2 text-sm text-indigo-600 font-medium bg-indigo-50 px-4 py-2 rounded-full animate-pulse">
@@ -147,12 +165,20 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Desglose de Puntos</span>
           </div>
           <div className="divide-y divide-gray-200">
-            {result.details.map((detail, idx) => (
-              <div key={idx} className="p-6 hover:bg-gray-50 transition-colors group">
+            {result.details.map((detail, idx) => {
+              const hasAnswer = detail.userAnswer && detail.userAnswer.trim().length > 0;
+              
+              return (
+              <div key={idx} className={`p-6 transition-colors group ${!hasAnswer ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
                 <div className="flex justify-between items-start mb-3">
                    <div className="flex items-center gap-3">
                        <span className="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-1 rounded">#{idx + 1}</span>
                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wide">Pregunta {detail.questionId}</h4>
+                       {!hasAnswer && (
+                           <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
+                               No Respondida
+                           </span>
+                       )}
                    </div>
                    <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 font-medium">Valor: {detail.maxPoints} pts</span>
@@ -165,7 +191,7 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
                 <div className="mb-4 pl-4 border-l-2 border-gray-200">
                   <p className="text-xs font-bold text-gray-400 uppercase mb-1">Tu Respuesta:</p>
                   <div className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">
-                    {detail.userAnswer || <span className="italic text-gray-400">Sin respuesta registrada.</span>}
+                    {hasAnswer ? detail.userAnswer : <span className="italic text-gray-400">Sin respuesta registrada (Tiempo agotado o dejada en blanco).</span>}
                   </div>
                 </div>
 
@@ -184,12 +210,14 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
                     {detail.isCorrect ? (
                       <><Check className="w-4 h-4" /> <span className="text-sm font-bold">Respuesta Correcta</span></>
                     ) : (
-                      <><X className="w-4 h-4" /> <span className="text-sm font-bold">Respuesta Incorrecta</span></>
+                      <><X className="w-4 h-4" /> <span className="text-sm font-bold">
+                        {hasAnswer ? 'Respuesta Incorrecta' : 'Sin Puntos (No respondida)'}
+                      </span></>
                     )}
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
         
