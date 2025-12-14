@@ -62,6 +62,7 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
     const payload = {
       fullName: user.fullName,
       cedula: user.cedula,
+      carrera: user.carrera,
       score: gradeOver20.toFixed(2), 
       maxScore: "20",
       percentage: (rawPercentage * 100).toFixed(1) + '%',
@@ -98,7 +99,11 @@ const Results: React.FC<ResultsProps> = ({ result, user, onRestart }) => {
         <div className={`bg-white rounded-2xl shadow-xl overflow-hidden border-t-8 ${gradeOver20 >= 12 ? 'border-green-500' : 'border-red-500'}`}>
           <div className="p-8 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Informe de Resultados</h1>
-            <p className="text-gray-500 mb-6">Estudiante: <span className="font-semibold text-gray-800">{user.fullName}</span> ({user.cedula})</p>
+            <p className="text-gray-500 mb-6">
+              Estudiante: <span className="font-semibold text-gray-800">{user.fullName}</span>
+              <br/>
+              <span className="text-sm">C.I: {user.cedula} • {user.carrera}</span>
+            </p>
             
             <div className="flex justify-center items-center mb-6">
               <div className={`w-48 h-48 rounded-full flex flex-col items-center justify-center border-4 ${gradeOver20 >= 12 ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50'}`}>

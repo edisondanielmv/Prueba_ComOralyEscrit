@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { BookOpen, User as UserIcon, CreditCard, Loader2, AlertTriangle, Key, HelpCircle, X, CheckCircle } from 'lucide-react';
+import { BookOpen, User as UserIcon, CreditCard, Loader2, AlertTriangle, Key, HelpCircle, X, GraduationCap } from 'lucide-react';
 import { checkSystemAvailability } from '../services/geminiService';
 
 interface LoginProps {
@@ -10,6 +10,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [fullName, setFullName] = useState('');
   const [cedula, setCedula] = useState('');
+  const [carrera, setCarrera] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -20,8 +21,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
 
     // 1. Validaciones básicas de campos
-    if (!fullName.trim() || !cedula.trim()) {
-      setError('Por favor complete su Nombre y Cédula.');
+    if (!fullName.trim() || !cedula.trim() || !carrera.trim()) {
+      setError('Por favor complete su Nombre, Cédula y Carrera.');
       return;
     }
     if (cedula.length < 5) {
@@ -60,7 +61,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     // 4. Todo correcto, procedemos al login
     setIsVerifying(false);
-    onLogin({ fullName, cedula, apiKey: cleanApiKey });
+    onLogin({ fullName, cedula, carrera, apiKey: cleanApiKey });
   };
 
   return (
@@ -161,6 +162,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   placeholder="Ej: 1720304050"
                   value={cedula}
                   onChange={(e) => setCedula(e.target.value)}
+                  disabled={isVerifying}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="carrera" className="block text-sm font-semibold text-gray-700 mb-1">Carrera / Facultad</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <GraduationCap className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="carrera"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent sm:text-sm transition-all"
+                  placeholder="Ej: Ingeniería en Sistemas"
+                  value={carrera}
+                  onChange={(e) => setCarrera(e.target.value)}
                   disabled={isVerifying}
                 />
               </div>
